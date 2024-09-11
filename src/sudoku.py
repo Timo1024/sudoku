@@ -1,0 +1,177 @@
+# in this file the sudoku class is defined
+# 6x6 sudoku is solved using backtracking algorithm
+
+import numpy as np
+import random
+from copy import deepcopy
+import time
+import sys
+import matplotlib.pyplot as plt
+
+class Sudoku:
+    def __init__(self):
+        print("Initializing Sudoku...")
+        # 6x6 grid initialized to 0 (empty cells)
+        self.grid = [[0]*6 for _ in range(6)]
+        self.fill()
+        self.solvedGrid = deepcopy(self.grid)
+        # self.generate_sudoku()
+
+
+    def getIncreasingLines(self):
+        """Get all orthogonally connected lines where the values are increasing. Use the solved grid."""
+        visited = [[False]*6 for _ in range(6)]
+        lines = []
+        for row in range(6):
+            for col in range(6):
+                if not visited[row][col]:
+                    line = []
+                    self.dfsGrowingLines(row, col, visited, line)
+                    if len(line) > 1:
+                        lines.append(line)
+        return lines
+
+    def dfsGrowingLines(self, row, col, visited, line):
+        """Get all orthogonally connected lines where the values are increasing. Use the solved grid. Use depth-first search."""
+        if visited[row][col]:
+            return
+        visited[row][col] = True
+        line.append((row, col))
+        for dr, dc in [(0, 1), (1, 0), (0, -1), (-1, 0)]:
+            new_row, new_col = row + dr, col + dc
+            if 0 <= new_row < 6 and 0 <= new_col < 6 and self.solvedGrid[new_row][new_col] > self.solvedGrid[row][col]:
+                self.dfsGrowingLines(new_row, new_col, visited, line)
+
+
+    def count_solutions(self):
+        """Count the number of solutions for the current grid."""
+        count = 0
+        for row in range(6):
+            for col in range(6):
+                if self.grid[row][col] == 0:
+                    for num in range(1, 7):
+                        if self.is_valid(self.grid, row, col, num):
+                            self.grid[row][col] = num
+                            count += self.count_solutions()
+                            self.grid[row][col] = 0
+                    return count
+        return 1
+
+    def is_valid(self, grid, row, col, num):
+        """Check if placing num in grid[row][col] is valid."""
+        # Check if num is in the current row or column
+        for i in range(6):
+            if grid[row][i] == num or grid[i][col] == num:
+                return False
+
+        # Check if num is in the 2x3 sub-grid (regions)
+        start_row, start_col = 2 * (row // 2), 3 * (col // 3)
+        for i in range(2):
+            for j in range(3):
+                if grid[start_row + i][start_col + j] == num:
+                    return False
+        return True
+    
+    def fill(self):
+        """Recursive backtracking to randomly fill the grid with valid values."""
+        for row in range(6):
+            for col in range(6):
+                if self.grid[row][col] == 0:
+                    random_nums = list(range(1, 7))
+                    random.shuffle(random_nums)  # Shuffle numbers to ensure randomness
+                    
+                    for num in random_nums:
+                        if self.is_valid(self.grid, row, col, num):
+                            self.grid[row][col] = num
+                            if self.fill():
+                                return True
+                            self.grid[row][col] = 0
+                    return False
+        return True
+
+    def display(self, solved=False):
+        """Displays the Sudoku grid."""
+        grid_to_display = self.solvedGrid if solved else self.grid
+        # nice visual representation of the grid with grid lines
+        for i in range(6):
+            if i % 2 == 0:
+                print("+" + "-----------+"*2)
+            # else:
+                # print("|" + "       |"*2)
+            for j in range(6):
+                if j % 3 == 0:
+                    print("| ", end=" ")
+                print(grid_to_display[i][j] if grid_to_display[i][j] != 0 else "_", end="  ")
+            print("|")
+        print("+" + "-----------+"*2)
+
+    def displayAsPlot(self, solved=False):
+        """Displays the Sudoku grid indicating the indices on the edge and displaying the 2x3 grids and values."""
+        fig, ax = plt.subplots(figsize=(6, 6))
+
+        # Set white background and draw grid
+        ax.matshow(np.ones((6, 6)), cmap='Greys', vmin=1, vmax=1)  # white background
+
+        # Set ticks at the border to show indices (0 to 5)
+        ax.set_xticks(np.arange(6))
+        ax.set_yticks(np.arange(6))
+        ax.set_xticklabels([f"{i}" for i in range(0, 6)])
+        ax.set_yticklabels([f"{i}" for i in range(0, 6)])
+        
+        # Draw 2x3 subgrid lines with thicker lines
+        for i in range(7):
+            lw = 3 if i % 2 == 0 else 1  # Thicker horizontal lines for subgrids (every 2 rows)
+            ax.axhline(i - 0.5, color='black', lw=lw)
+            
+            lw = 3 if i % 3 == 0 else 1  # Thicker vertical lines for subgrids (every 3 columns)
+            ax.axvline(i - 0.5, color='black', lw=lw)
+        
+        # Fill the grid with values from the Sudoku matrix
+        for i in range(6):
+            for j in range(6):
+                value = self.grid[i][j]
+                if value != 0:  # Only display non-zero values
+                    ax.text(j, i, str(value), va='center', ha='center', fontsize=16)
+        
+        # Hide tick marks but keep labels
+        ax.tick_params(axis='x', which='both', length=0)  # Remove x-axis tick indicators
+        ax.tick_params(axis='y', which='both', left=False)  # Remove y-axis tick indicators
+
+        # Adjust the grid spacing and flip the y-axis (if desired)
+        plt.tight_layout()
+        plt.show()
+
+    def countEmpty(self):
+        """Count the number of empty cells in the grid."""
+        count = 0
+        for row in self.grid:
+            count += row.count(0)
+        return count
+
+    def removeValues(self, num, maxIterations=1000):
+        """Remove num random values from the grid if it just has one unique solution."""
+        count = 0
+        removed = 0
+        while removed < num and count < maxIterations:
+            row, col = random.randint(0, 5), random.randint(0, 5)
+            if self.grid[row][col] != 0:
+                temp = self.grid[row][col]
+                self.grid[row][col] = 0
+                if self.count_solutions() != 1:
+                    self.grid[row][col] = temp
+                else:
+                    removed += 1
+            count += 1
+
+
+class HelloWorld:
+    def __init__(self):
+        print("Hello World")
+
+# Example usage
+# sudoku = Sudoku()
+# sudoku.display()
+
+    
+
+        
