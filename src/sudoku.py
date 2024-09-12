@@ -20,27 +20,105 @@ class Sudoku:
 
     def getIncreasingLines(self):
         """Get all orthogonally connected lines where the values are increasing. Use the solved grid."""
+        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]  # All 8 directions
+    
+        rows = len(self.solvedGrid)
+        cols = len(self.solvedGrid[0])
+        
+        # Helper function for checking if a position is within bounds
+        def is_valid(x, y):
+            return 0 <= x < rows and 0 <= y < cols
+        
+        # DFS function to explore increasing paths from a given cell
+        def dfs(x, y, path):
+            current_value = self.solvedGrid[x][y]
+            path.append((x, y))  # Add current position to the path
+            
+            # Track whether a valid larger neighbor is found
+            found_larger = False
+            
+            for dx, dy in directions:
+                nx, ny = x + dx, y + dy
+                if is_valid(nx, ny) and self.solvedGrid[nx][ny] > current_value:
+                    found_larger = True
+                    dfs(nx, ny, path[:])  # Recursively search from this neighbor
+            
+            # If no larger neighbor is found, append the path if it has more than 1 element
+            if not found_larger and len(path) > 1:
+                results.append(path)
+        
+        results = []
+        
+        # Explore increasing paths starting from each cell
+        for i in range(rows):
+            for j in range(cols):
+                dfs(i, j, [])
+        
+        return results
+    
+    def getEvenOddLines(self):
+        """Get all orthogonally connected lines where the values alternate between even and odd."""
+        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]  # Orthogonal directions (up, down, left, right)
+        
+        rows = len(self.solvedGrid)
+        cols = len(self.solvedGrid[0])
+        
+        # Helper function for checking if a position is within bounds
+        def is_valid(x, y):
+            return 0 <= x < rows and 0 <= y < cols
+        
+        def is_even(num):
+            return num % 2 == 0
+        
+        # DFS function to explore paths from a given cell
+        def dfs(x, y, path, visited):
+            current_value = self.solvedGrid[x][y]
+            path.append((x, y))  # Add current position to the path
+            visited[x][y] = True  # Mark the current cell as visited
+            
+            found_larger = False
+            
+            for dx, dy in directions:
+                nx, ny = x + dx, y + dy
+                if is_valid(nx, ny) and not visited[nx][ny] and is_even(self.solvedGrid[nx][ny]) != is_even(current_value):
+                    found_larger = True
+                    dfs(nx, ny, path[:], visited)  # Recursively search from this neighbor
+            
+            # If no valid neighbor is found, append the path if it has more than 1 element
+            if not found_larger and len(path) > 1:
+                results.append(path)
+            
+            # Unmark this cell to allow it to be used in future paths starting from different cells
+            visited[x][y] = False
+        
+        results = []
+    
+        # Initialize a visited matrix to keep track of visited cells during each DFS
+        visited = [[False for _ in range(cols)] for _ in range(rows)]
+        
+        # Start DFS from each cell
+        for i in range(rows):
+            for j in range(cols):
+                dfs(i, j, [], visited)
+        
+        return results
+    
+    def getRandomLines(self, lines, num_lines=10, lengthRange=(3, 6)):
+        """Get a random sample of lines from the list of lines which dont overlap."""
         visited = [[False]*6 for _ in range(6)]
-        lines = []
-        for row in range(6):
-            for col in range(6):
-                if not visited[row][col]:
-                    line = []
-                    self.dfsGrowingLines(row, col, visited, line)
-                    if len(line) > 1:
-                        lines.append(line)
-        return lines
-
-    def dfsGrowingLines(self, row, col, visited, line):
-        """Get all orthogonally connected lines where the values are increasing. Use the solved grid. Use depth-first search."""
-        if visited[row][col]:
-            return
-        visited[row][col] = True
-        line.append((row, col))
-        for dr, dc in [(0, 1), (1, 0), (0, -1), (-1, 0)]:
-            new_row, new_col = row + dr, col + dc
-            if 0 <= new_row < 6 and 0 <= new_col < 6 and self.solvedGrid[new_row][new_col] > self.solvedGrid[row][col]:
-                self.dfsGrowingLines(new_row, new_col, visited, line)
+        random.shuffle(lines)
+        result = []
+        count = 0
+        for line in lines:
+            if count >= num_lines:
+                break
+            if len(line) >= lengthRange[0] and len(line) <= lengthRange[1] and not any(visited[i][j] for i, j in line):
+                result.append(line)
+                # Mark the cells in the line as visited
+                for i, j in line:
+                    visited[i][j] = True
+                count += 1
+        return result
 
 
     def count_solutions(self):
@@ -105,8 +183,10 @@ class Sudoku:
             print("|")
         print("+" + "-----------+"*2)
 
-    def displayAsPlot(self, solved=False):
+    def displayAsPlot(self, lines=None, solved=False):
         """Displays the Sudoku grid indicating the indices on the edge and displaying the 2x3 grids and values."""
+        grid_to_display = self.solvedGrid if solved else self.grid
+
         fig, ax = plt.subplots(figsize=(6, 6))
 
         # Set white background and draw grid
@@ -129,13 +209,23 @@ class Sudoku:
         # Fill the grid with values from the Sudoku matrix
         for i in range(6):
             for j in range(6):
-                value = self.grid[i][j]
+                value = grid_to_display[i][j]
                 if value != 0:  # Only display non-zero values
                     ax.text(j, i, str(value), va='center', ha='center', fontsize=16)
         
         # Hide tick marks but keep labels
         ax.tick_params(axis='x', which='both', length=0)  # Remove x-axis tick indicators
         ax.tick_params(axis='y', which='both', left=False)  # Remove y-axis tick indicators
+
+        ax.set_xlim(-0.5, 5.5)  # Limit for the x-axis
+        ax.set_ylim(5.5, -0.5)
+
+        # Display lines
+        if lines is not None:
+            for line in lines:
+                for i in range(len(line) - 1):
+                    (row1, col1), (row2, col2) = line[i], line[i+1]
+                    ax.plot([col1, col2], [row1, row2], color="#cc222299", lw=2)
 
         # Adjust the grid spacing and flip the y-axis (if desired)
         plt.tight_layout()
